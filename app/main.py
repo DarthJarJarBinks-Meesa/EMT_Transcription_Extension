@@ -12,8 +12,9 @@ from slowapi.util import get_remote_address
 from starlette.responses import Response
 
 from app.exceptions import EpcrExtractionError, GroqServiceError
-from app.models.schemas import TranscriptionResponse
+from app.models.schemas import PerKeyUsage, TranscriptionResponse, UsageReport
 from app.services.groq_service import GroqService, create_groq_service
+from app.usage_tracker import UsageTracker
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -47,6 +48,29 @@ ALLOWED_AUDIO_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 
+def load_valid_api_keys() -> frozenset[str]:
+    """
+    Build the set of client API keys allowed to call protected routes.
+
+    - ``API_KEYS``: comma- or newline-separated list (one secret per EMT / device).
+    - ``API_KEY``: optional single secret; merged with ``API_KEYS`` if both are set
+      so you can keep a legacy or admin key alongside per-EMT keys.
+
+    At least one non-empty key must result or the server should not start.
+    """
+    keys: set[str] = set()
+    raw_multi = (os.getenv("API_KEYS") or "").strip()
+    if raw_multi:
+        for part in raw_multi.replace("\n", ",").split(","):
+            s = part.strip()
+            if s:
+                keys.add(s)
+    single = (os.getenv("API_KEY") or "").strip()
+    if single:
+        keys.add(single)
+    return frozenset(keys)
+
+
 def _rate_limit_key(request: Request) -> str:
     """Prefer hashed API key for per-client limits; fall back to client IP."""
     auth = request.headers.get("authorization") or ""
@@ -75,16 +99,20 @@ def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Response:
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    api_key = (os.getenv("API_KEY") or "").strip()
-    if not api_key:
+    valid_keys = load_valid_api_keys()
+    if not valid_keys:
         raise RuntimeError(
-            "API_KEY must be set to a non-empty value before starting the server."
+            "At least one client API key is required: set API_KEY and/or a non-empty "
+            "API_KEYS (comma-separated) before starting the server."
         )
+    app.state.valid_api_keys = valid_keys
+    logger.info("Loaded %d valid client API key(s)", len(valid_keys))
     if not (os.getenv("GROQ_API_KEY") or "").strip():
         raise RuntimeError(
             "GROQ_API_KEY must be set to a non-empty value before starting the server."
         )
 
+    app.state.usage_tracker = UsageTracker()
     app.state.groq_service = create_groq_service()
     logger.info("GroqService initialised (async entrypoints offload blocking Groq calls)")
     yield
@@ -107,19 +135,20 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["POST", "GET"],
-    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Admin-Key"],
 )
 
 
 def verify_api_key(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     x_api_key: Annotated[str | None, Header()] = None,
-) -> bool:
-    expected = (os.getenv("API_KEY") or "").strip()
-    if not expected:
+) -> str:
+    valid = getattr(request.app.state, "valid_api_keys", None)
+    if not valid:
         raise HTTPException(
             status_code=503,
-            detail="Server is not configured with API_KEY.",
+            detail="Server is not configured with valid API keys.",
         )
 
     token: str | None = None
@@ -130,13 +159,31 @@ def verify_api_key(
     if token is None and x_api_key:
         token = x_api_key.strip()
 
-    if not token or token != expected:
+    if not token or token not in valid:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
-    return True
+    return token
 
 
 def get_groq_service(request: Request) -> GroqService:
     return request.app.state.groq_service
+
+
+def get_usage_tracker(request: Request) -> UsageTracker:
+    return request.app.state.usage_tracker
+
+
+def verify_admin_key(
+    x_admin_key: Annotated[str | None, Header()] = None,
+) -> bool:
+    expected = (os.getenv("ADMIN_API_KEY") or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=404,
+            detail="Usage reporting is not enabled (set ADMIN_API_KEY).",
+        )
+    if not x_admin_key or x_admin_key.strip() != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing admin key.")
+    return True
 
 
 @app.post("/api/v1/process-audio", response_model=TranscriptionResponse)
@@ -145,12 +192,15 @@ async def process_audio(
     request: Request,
     file: Annotated[UploadFile, File()],
     groq_service: Annotated[GroqService, Depends(get_groq_service)],
-    _authorized: Annotated[bool, Depends(verify_api_key)],
+    usage_tracker: Annotated[UsageTracker, Depends(get_usage_tracker)],
+    client_api_key: Annotated[str, Depends(verify_api_key)],
 ):
     """
     Takes an audio file of an EMS encounter, transcribes it using Whisper,
     and extracts organised ePCR fields and a SOAP narrative using Llama 3.
     """
+    await usage_tracker.record_process_audio_request(client_api_key)
+
     raw_name: str = (file.filename or "").strip()
     if not raw_name:
         raise HTTPException(status_code=400, detail="No file uploaded.")
@@ -178,7 +228,9 @@ async def process_audio(
 
     try:
         transcript = await groq_service.transcribe_audio(audio_bytes, raw_name)
+        await usage_tracker.record_transcription(client_api_key, len(audio_bytes))
         epcr_data = await groq_service.extract_epcr_data(transcript)
+        await usage_tracker.record_full_epcr_success(client_api_key)
         return TranscriptionResponse(raw_transcript=transcript, epcr_data=epcr_data)
 
     except HTTPException:
@@ -213,3 +265,19 @@ def readiness(request: Request):
     """Returns whether core app dependencies were initialised (after lifespan)."""
     ok = getattr(request.app.state, "groq_service", None) is not None
     return {"ready": ok}
+
+
+@app.get("/admin/usage", response_model=UsageReport)
+async def admin_usage(
+    _admin: Annotated[bool, Depends(verify_admin_key)],
+    usage_tracker: Annotated[UsageTracker, Depends(get_usage_tracker)],
+):
+    """
+    Per–client-API-key usage since last process start.
+
+    Keys are identified only by ``key_fingerprint_sha256`` (SHA-256 of the raw
+    client secret). Map fingerprints to EMTs using your own key roster; values
+    are not persisted across restarts unless you add external storage.
+    """
+    rows = await usage_tracker.snapshot_rows()
+    return UsageReport(by_key=[PerKeyUsage.model_validate(r) for r in rows])

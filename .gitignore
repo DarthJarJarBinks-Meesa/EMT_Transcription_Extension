@@ -48,5 +48,5 @@ coverage.xml
 uploads/
 *.wav
 *.mp3
-!**/audio_hyperglycemia.mp3
+!**/Audio_Hyperglycemia.mp3
 *.m4a

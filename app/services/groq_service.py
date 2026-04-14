@@ -57,7 +57,16 @@ class GroqService:
         You must output ONLY valid JSON that precisely matches the following JSON schema:
         {json.dumps(schema_json)}
 
-        In addition to extracting the fields, you must generate a highly professional 'narrative' field using the standard SOAP or CHART format.
+        Populate `physical_exam` with concise findings for each body region when the transcript mentions an exam, observation, or complaint localized to that region.
+        Use null for any region not discussed. Prefer short clinical phrases (e.g. "CTA bilaterally", "PERRL", "no edema") over long prose inside each field.
+
+        Generate `clinical_tagged_summary` as a separate string that mimics student PCR style: phrase-based, minimal complete sentences,
+        heavy abbreviations (e.g. A&Ox3, PERRL, CTA, SOB, LOC, NC, vis/palp, reg/weak/rapid, x4 quads, ⊕ for intact neuro checks when appropriate).
+        Start each logical block with a tag and a space, in clinical order when possible: <S> then <O> then regional exams <HEENT> <CHEST> <ABD> <PELVIS> <BACK>,
+        then extremities using <L EXT> and/or <R EXT> (or two tagged blocks when upper and injured lower extremity need separate paragraphs, as in common run reports),
+        then <A> <P> <E>. Do not invent findings; omit a tag entirely if there is nothing for that section. Do not include signature lines, page numbers, or blanks.
+
+        You must also generate a highly professional `narrative` field using the standard SOAP or CHART format, and a plain-English `call_summary` as defined in the schema.
         Do not include any text outside the JSON object.
         """
 
