@@ -143,33 +143,48 @@ Add per-EMT keys with another `-e API_KEYS=key1,key2,...` on the same `docker ru
 | `GET` | `/health` | Liveness. |
 | `GET` | `/health/ready` | Returns whether the Groq service finished startup. |
 
-## Drag-and-drop web frontend (GitHub Pages)
+## Drag-and-drop web frontend (`docs/`)
 
-This repo includes a static healthcare-themed frontend in `docs/`:
+Static UI: drag an MP3/WAV file, POST to `/api/v1/process-audio`, view JSON + summary.
 
-- Drag and drop an MP3/WAV file
-- Send it to your backend (`/api/v1/process-audio`)
-- View formatted JSON output and summary
+**Do not open `docs/index.html` as a `file://` URL.** Browsers block `fetch()` to your API from `file://`. Serve the folder over HTTP (below).
 
-### Local use
+### Option A — Local static server + local API (recommended for dev)
 
-Open `docs/index.html` in your browser, then fill:
+Use two terminals.
 
-- **API Base URL** (for local backend: `http://127.0.0.1:8000`)
-- **Client API Key** (`API_KEY`/`API_KEYS` value your backend accepts)
+**Terminal 1 — backend** (CORS must allow the origin where the UI is served):
 
-Then drag an audio file onto the dropzone and click **Process Audio**.
+```bash
+cd emt_epcr_backend
+export GROQ_API_KEY="..."
+export API_KEY="..."
+export ALLOWED_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
+poetry run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
 
-### Hosted on GitHub Pages
+**Terminal 2 — frontend** (pick any free port; `5500` matches `ALLOWED_ORIGINS` above):
 
-On pushes to `main`, GitHub Actions deploys the `docs/` folder via `.github/workflows/pages.yml`.
+```bash
+cd emt_epcr_backend/docs
+python -m http.server 5500
+```
 
-Expected URL format:
+Open [http://127.0.0.1:5500](http://127.0.0.1:5500) (not GitHub Pages). Set:
 
-`https://<your-github-username>.github.io/<repo-name>/`
+- **API Base URL:** `http://127.0.0.1:8000`
+- **Client API Key:** same as server `API_KEY`
 
-For this repository, that will be:
+If you change the frontend port, update `ALLOWED_ORIGINS` to match and restart Uvicorn.
+
+### Option B — GitHub Pages (needs public HTTPS API + CORS)
+
+A `https://` Pages site cannot call `http://127.0.0.1` (mixed content / unreachable host). Deploy the API to HTTPS and set:
+
+`ALLOWED_ORIGINS=https://<your-github-username>.github.io`
+
+Pushes to `main` deploy `docs/` via `.github/workflows/pages.yml`. Example site:
 
 `https://DarthJarJarBinks-Meesa.github.io/EMT_Transcription_Extension/`
 
-> If the page is not live yet, check **Settings → Pages** and **Actions** in GitHub to confirm Pages is enabled and the deploy workflow succeeded.
+More detail: [docs/README.md](docs/README.md).
