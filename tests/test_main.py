@@ -245,3 +245,44 @@ def test_keyword_rescue_fills_vitals_when_extraction_fails(monkeypatch):
     assert epcr["vitals"]["spo2"] == "95%"
     assert epcr["physical_exam"]["chest"]["lung_sounds"].lower().startswith("clear")
     assert "bleeding / blood loss" in epcr["assessment"]["symptoms"][0].lower()
+
+
+def test_keyword_rescue_handles_radio_report_phrasing(monkeypatch):
+    monkeypatch.setenv("API_KEY", "k2")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key-" + "n" * 40)
+    monkeypatch.setenv("RATE_LIMIT", "10000/minute")
+    import app.main as main
+
+    class BadFake(FakeGroqService):
+        async def transcribe_audio(self, audio_bytes: bytes, filename: str) -> str:
+            return (
+                "Ambulance 1 en route with a 51-year-old male. "
+                "Heart rate of 110. He is sitting at 95% on room air. "
+                "Respirations are 25 breaths per minute. Blood pressure is 98 over 58. "
+                "Hospital clear."
+            )
+
+        async def extract_epcr_data(self, transcript: str) -> EPcrExtraction:
+            raise EpcrExtractionError("bad")
+
+        def build_best_effort_epcr(self, transcript: str) -> EPcrExtraction:
+            return GroqService().build_best_effort_epcr(transcript)
+
+    with patch.object(main, "create_groq_service", return_value=BadFake()):
+        with TestClient(main.app) as tc:
+            r = tc.post(
+                "/api/v1/process-audio",
+                headers={"X-API-Key": "k2"},
+                files={"file": ("a.mp3", io.BytesIO(b"x" * 100), "audio/mpeg")},
+            )
+
+    assert r.status_code == 200
+    epcr = r.json()["epcr_data"]
+    assert epcr["demographics"]["age"] == "51 years"
+    assert epcr["demographics"]["gender"].lower() == "male"
+    assert epcr["vitals"]["heart_rate"] == "110"
+    assert epcr["vitals"]["spo2"] == "95%"
+    assert epcr["vitals"]["respiratory_rate"] == "25"
+    assert epcr["vitals"]["blood_pressure"] == "98/58"
+    # "Hospital clear" should not be mistaken for clear lung sounds.
+    assert epcr["physical_exam"]["chest"]["lung_sounds"] == "Not stated in transcript."

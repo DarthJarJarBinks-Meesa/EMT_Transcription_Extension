@@ -145,7 +145,10 @@ class GroqService:
 
         # Demographics
         if self._is_missing(epcr.demographics.age):
-            age = self._extract_first(r"\b(\d{1,3})\s*(?:y/o|yo|years?\s*old)\b", t)
+            age = self._extract_first(
+                r"\b(\d{1,3})\s*(?:-| )?(?:y/o|yo|year(?:s)?(?:\s*|-)?old)\b",
+                t,
+            )
             if age:
                 epcr.demographics.age = f"{age} years"
 
@@ -157,16 +160,25 @@ class GroqService:
         # Vitals
         if self._is_missing(epcr.vitals.blood_pressure):
             bp = self._extract_first(r"\b(\d{2,3}\s*/\s*\d{2,3})\b", t)
+            if not bp:
+                over = self._extract_first(
+                    r"\b(?:blood pressure|bp)\s*(?:is|:)?\s*(\d{2,3})\s*(?:over)\s*(\d{2,3})\b",
+                    t,
+                )
+                if over:
+                    parts = over.split()
+                    if len(parts) >= 2:
+                        bp = f"{parts[0]}/{parts[1]}"
             if bp:
                 epcr.vitals.blood_pressure = bp.replace(" ", "")
 
         if self._is_missing(epcr.vitals.heart_rate):
-            hr = self._extract_first(r"\b(?:heart\s*rate|hr|pulse)\s*(?:is|:)?\s*(\d{2,3})\b", t)
+            hr = self._extract_first(r"\b(?:heart\s*rate|hr|pulse)\s*(?:is|are|of|:)?\s*(\d{2,3})\b", t)
             if hr:
                 epcr.vitals.heart_rate = hr
 
         if self._is_missing(epcr.vitals.respiratory_rate):
-            rr = self._extract_first(r"\b(?:resp(?:iratory)?\s*rate|rr)\s*(?:is|:)?\s*(\d{1,2})\b", t)
+            rr = self._extract_first(r"\b(?:resp(?:iratory)?\s*rate|respirations?|rr)\s*(?:is|are|of|:)?\s*(\d{1,2})\b", t)
             if rr:
                 epcr.vitals.respiratory_rate = rr
 
@@ -175,6 +187,8 @@ class GroqService:
                 r"\b(?:spo2|o2\s*sat(?:uration)?|oxygen\s*saturation)\s*(?:is|:)?\s*(\d{2,3})\s*%?\b",
                 t,
             )
+            if not spo2:
+                spo2 = self._extract_first(r"\b(\d{2,3})\s*%\s*(?:on\s*room\s*air|room\s*air)\b", t)
             if spo2:
                 epcr.vitals.spo2 = f"{spo2}%"
 
@@ -186,12 +200,13 @@ class GroqService:
         # Organ/exam clues
         if self._is_missing(epcr.physical_exam.chest.lung_sounds):
             lung_match = re.search(
-                r"\b(clear(?: to auscultation)?|cta|wheez(?:e|ing)?|rhonchi|crackles?)\b",
+                r"\b(?:lungs?|lung\s*sounds?|breath\s*sounds?)\b.{0,40}\b(clear(?: to auscultation)?|cta|wheez(?:e|ing)?|rhonchi|crackles?)\b",
                 t,
                 re.IGNORECASE,
             )
             if lung_match:
-                epcr.physical_exam.chest.lung_sounds = lung_match.group(1).upper() if lung_match.group(1).lower() == "cta" else lung_match.group(1)
+                token = lung_match.group(1)
+                epcr.physical_exam.chest.lung_sounds = token.upper() if token.lower() == "cta" else token
 
         # Blood loss / bleeding cues
         if self._is_missing(epcr.assessment.chief_complaint):
@@ -285,7 +300,7 @@ class GroqService:
             if back_line:
                 epcr.physical_exam.back.back = back_line
         if self._is_missing(epcr.physical_exam.pelvis_gu_gi):
-            pelvis_line = self._snippet_for_keyword(t, r"\bpelvis|gu|gi|urinary|incontinence\b")
+            pelvis_line = self._snippet_for_keyword(t, r"\b(pelvis|gu|gi|urinary|incontinence)\b")
             if pelvis_line:
                 epcr.physical_exam.pelvis_gu_gi = pelvis_line
         if self._is_missing(epcr.physical_exam.extremities.left_arm):

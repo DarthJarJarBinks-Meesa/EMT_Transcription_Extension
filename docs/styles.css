@@ -1,0 +1,123 @@
+:root {
+  --bg: #0c1118;
+  --panel: #141c26;
+  --line: #2a3a4f;
+  --text: #e8f1ff;
+  --muted: #9eb5d1;
+  --accent: #4cc9f0;
+  --ok: #4ade80;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, #0b121b, #0a0f15);
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 1.8rem;
+}
+.hero p { margin: 0; color: var(--muted); }
+
+.card {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.card h2 { margin: 0 0 12px; font-size: 1.05rem; }
+
+.row { display: grid; gap: 8px; margin-bottom: 12px; }
+label { color: var(--muted); font-size: 0.92rem; }
+input[type="text"], input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0e151f;
+  color: var(--text);
+  padding: 10px 12px;
+}
+
+.hint { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+.dropzone {
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  min-height: 130px;
+  cursor: pointer;
+  transition: 0.2s border-color, 0.2s background;
+  text-align: center;
+  color: var(--muted);
+}
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(76, 201, 240, 0.08);
+}
+.dropzone input { display: none; }
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #07252f;
+  font-weight: 700;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.file-meta { color: var(--muted); font-size: 0.9rem; }
+.status {
+  margin: 10px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0e151f;
+  color: var(--ok);
+  min-height: 42px;
+  white-space: pre-wrap;
+  padding: 10px;
+}
+
+.output {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0e151f;
+  color: #cde0ff;
+  max-height: 540px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.summary {
+  margin: 0 0 12px;
+  border-left: 4px solid var(--accent);
+  background: #0e151f;
+  padding: 10px 12px;
+  color: #d5e6ff;
+}
+
+.hidden { display: none; }

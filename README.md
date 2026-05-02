@@ -142,3 +142,34 @@ Add per-EMT keys with another `-e API_KEYS=key1,key2,...` on the same `docker ru
 | `GET` | `/admin/usage` | Per-key usage JSON. Requires `ADMIN_API_KEY` and header **`X-Admin-Key`**. |
 | `GET` | `/health` | Liveness. |
 | `GET` | `/health/ready` | Returns whether the Groq service finished startup. |
+
+## Drag-and-drop web frontend (GitHub Pages)
+
+This repo includes a static healthcare-themed frontend in `docs/`:
+
+- Drag and drop an MP3/WAV file
+- Send it to your backend (`/api/v1/process-audio`)
+- View formatted JSON output and summary
+
+### Local use
+
+Open `docs/index.html` in your browser, then fill:
+
+- **API Base URL** (for local backend: `http://127.0.0.1:8000`)
+- **Client API Key** (`API_KEY`/`API_KEYS` value your backend accepts)
+
+Then drag an audio file onto the dropzone and click **Process Audio**.
+
+### Hosted on GitHub Pages
+
+On pushes to `main`, GitHub Actions deploys the `docs/` folder via `.github/workflows/pages.yml`.
+
+Expected URL format:
+
+`https://<your-github-username>.github.io/<repo-name>/`
+
+For this repository, that will be:
+
+`https://DarthJarJarBinks-Meesa.github.io/EMT_Transcription_Extension/`
+
+> If the page is not live yet, check **Settings → Pages** and **Actions** in GitHub to confirm Pages is enabled and the deploy workflow succeeded.

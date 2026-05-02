@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ePCR Audio Intake Console</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <h1>ePCR Audio Intake Console</h1>
+      <p>Drag an EMS call audio file to transcribe and generate structured documentation.</p>
+    </header>
+
+    <section class="card settings">
+      <h2>Connection</h2>
+      <div class="row">
+        <label for="apiBase">API Base URL</label>
+        <input id="apiBase" type="text" value="http://127.0.0.1:8000" placeholder="https://your-api.example.com">
+      </div>
+      <div class="row">
+        <label for="apiKey">Client API Key</label>
+        <input id="apiKey" type="password" placeholder="Paste X-API-Key value">
+      </div>
+      <p class="hint">Your key is stored only in this browser's local storage.</p>
+    </section>
+
+    <section class="card">
+      <h2>Upload Audio</h2>
+      <label id="dropzone" class="dropzone" for="fileInput">
+        <input id="fileInput" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,.webm,.flac,.mp4,.mpeg">
+        <span>Drop MP3/WAV here or click to browse</span>
+      </label>
+      <div class="actions">
+        <button id="submitBtn" disabled>Process Audio</button>
+        <span id="fileMeta" class="file-meta">No file selected.</span>
+      </div>
+      <pre id="status" class="status">Ready.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Structured Output</h2>
+      <div id="summary" class="summary hidden"></div>
+      <pre id="output" class="output">{}</pre>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
