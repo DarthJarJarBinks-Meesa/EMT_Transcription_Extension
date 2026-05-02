@@ -237,6 +237,9 @@ async def process_audio(
         raise
     except EpcrExtractionError as e:
         logger.warning("ePCR extraction failed: %s", type(e).__name__)
+        if "transcript" in locals() and transcript:
+            epcr_data = groq_service.build_best_effort_epcr(transcript)
+            return TranscriptionResponse(raw_transcript=transcript, epcr_data=epcr_data)
         raise HTTPException(
             status_code=422,
             detail="Could not produce valid structured documentation from the transcript.",

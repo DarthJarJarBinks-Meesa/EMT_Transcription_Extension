@@ -7,6 +7,7 @@ class PatientDemographics(BaseModel):
     name: Optional[str] = Field(default=None, description="Patient's full name if provided")
     age: Optional[str] = Field(default=None, description="Patient's age")
     gender: Optional[str] = Field(default=None, description="Patient's gender")
+    weight: Optional[str] = Field(default=None, description="Patient's weight when stated (e.g., 180 lb or 82 kg)")
 
 
 class VitalSigns(BaseModel):
