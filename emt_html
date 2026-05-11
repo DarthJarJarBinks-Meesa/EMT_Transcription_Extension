@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EMT Call Recorder</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(59,189,147,0.5);
+    --accent: #3bbd93;
+    --accent-dim: rgba(59,189,147,0.12);
+    --accent-glow: rgba(59,189,147,0.25);
+    --danger: #e24b4a;
+    --danger-dim: rgba(226,75,74,0.12);
+    --warn: #ef9f27;
+    --text: #f0ede8;
+    --text-muted: #8a9ab5;
+    --text-dim: #4a5568;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { width: 18px; height: 18px; }
+  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .logo-text span { color: var(--accent); }
+  .status-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .status-dot.recording { background: var(--danger); animation: blink 1.2s infinite; }
+  .status-dot.ready { background: var(--accent); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 0;
+    min-height: 0;
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    overflow-y: auto;
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* Software Selector */
+  .software-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .software-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    width: 100%;
+  }
+  .software-card:hover { border-color: rgba(255,255,255,0.15); background: var(--surface2); }
+  .software-card.active {
+    border-color: var(--border-active);
+    background: var(--accent-dim);
+  }
+  .sw-icon {
+    width: 30px; height: 30px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .sw-info { flex: 1; }
+  .sw-name { font-size: 13px; font-weight: 500; }
+  .sw-type { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .sw-check { width: 16px; height: 16px; flex-shrink: 0; opacity: 0; transition: opacity 0.2s; }
+  .software-card.active .sw-check { opacity: 1; }
+
+  /* Call Info */
+  .info-grid { display: flex; flex-direction: column; gap: 10px; }
+  .info-row { display: flex; flex-direction: column; gap: 4px; }
+  .info-label { font-size: 11px; color: var(--text-muted); }
+  .info-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .info-input:focus { outline: none; border-color: var(--accent); }
+  .info-input::placeholder { color: var(--text-dim); }
+  select.info-input option { background: var(--surface2); }
+
+  /* ── Main Content ── */
+  .content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Recorder Panel */
+  .recorder-panel {
+    padding: 32px 36px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    background: var(--surface);
+  }
+
+  .waveform-wrap {
+    width: 100%;
+    max-width: 600px;
+    height: 80px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+  }
+  #waveCanvas { width: 100%; height: 100%; display: block; }
+
+  .timer {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: var(--text);
+    text-align: center;
+  }
+  .timer.recording { color: var(--danger); }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .btn {
+    border: none;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    font-family: var(--sans);
+  }
+  .btn-record {
+    width: 64px; height: 64px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 22px;
+    position: relative;
+  }
+  .btn-record:hover { transform: scale(1.06); }
+  .btn-record.recording {
+    background: var(--surface2);
+    border: 2px solid var(--danger);
+  }
+  .btn-record .rec-icon { width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: all 0.3s; }
+  .btn-record.recording .rec-icon { border-radius: 4px; background: var(--danger); width: 18px; height: 18px; }
+
+  .btn-sm {
+    width: 44px; height: 44px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .btn-sm:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-sm svg { width: 18px; height: 18px; }
+
+  .btn-transcribe {
+    padding: 10px 22px;
+    background: var(--accent);
+    color: #0a1a12;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .btn-transcribe:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-transcribe:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  /* Recordings List */
+  .recordings-section {
+    padding: 24px 36px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .recordings-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .recordings-title { font-size: 14px; font-weight: 500; }
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  /* Recording Card */
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .rec-card:hover { border-color: rgba(255,255,255,0.12); }
+  .rec-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+  .rec-thumb {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--danger-dim);
+    border: 1px solid rgba(226,75,74,0.2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .rec-thumb svg { width: 16px; height: 16px; color: var(--danger); }
+  .rec-meta { flex: 1; min-width: 0; }
+  .rec-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; display: flex; gap: 10px; }
+  .rec-sub span { display: flex; align-items: center; gap: 4px; }
+  .rec-actions { display: flex; gap: 8px; }
+  .rec-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .rec-btn:hover { background: var(--surface2); color: var(--text); }
+  .rec-btn.primary { background: var(--accent-dim); border-color: var(--border-active); color: var(--accent); }
+  .rec-btn.primary:hover { background: rgba(59,189,147,0.2); }
+
+  /* Transcription Area */
+  .transcript-box {
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    display: none;
+  }
+  .transcript-box.open { display: block; }
+  .transcript-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .transcript-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    min-height: 60px;
+    font-family: var(--sans);
+  }
+  .transcript-text.pending {
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .transcript-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .copy-btn {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: var(--surface2); color: var(--text); }
+  .export-btn {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(59,189,147,0.3);
+    background: var(--accent-dim);
+    color: var(--accent);
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+    transition: all 0.15s;
+  }
+  .export-btn:hover { background: rgba(59,189,147,0.2); }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 60px 20px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .empty-icon { font-size: 36px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; line-height: 1.6; max-width: 220px; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast .t-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  /* Spinner */
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(59,189,147,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+      </svg>
+    </div>
+    <span class="logo-text">EMT <span>Response</span> Recorder</span>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Idle</span>
+  </div>
+</header>
+
+<!-- Main Layout -->
+<main>
+
+  <!-- Sidebar -->
+  <aside>
+    <!-- Software Selector -->
+    <div>
+      <div class="section-label">CAD / ePCR Software</div>
+      <div class="software-grid" id="softwareGrid">
+        <!-- injected by JS -->
+      </div>
+    </div>
+
+    <!-- Call Info -->
+    <div>
+      <div class="section-label">Call Information</div>
+      <div class="info-grid">
+        <div class="info-row">
+          <label class="info-label">Incident #</label>
+          <input class="info-input" id="incidentNum" type="text" placeholder="e.g. INC-20240410" />
+        </div>
+        <div class="info-row">
+          <label class="info-label">Unit / Crew ID</label>
+          <input class="info-input" id="unitId" type="text" placeholder="e.g. M-12" />
+        </div>
+        <div class="info-row">
+          <label class="info-label">Call Type</label>
+          <select class="info-input" id="callType">
+            <option value="">— Select —</option>
+            <option>Cardiac Arrest</option>
+            <option>Trauma</option>
+            <option>Respiratory Distress</option>
+            <option>Stroke / Neuro</option>
+            <option>MCI</option>
+            <option>BLS Transfer</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="info-row">
+          <label class="info-label">Priority Level</label>
+          <select class="info-input" id="priority">
+            <option value="">— Select —</option>
+            <option>Priority 1 — Lights &amp; Siren</option>
+            <option>Priority 2 — Urgent</option>
+            <option>Priority 3 — Non-urgent</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="content">
+
+    <!-- Recorder -->
+    <div class="recorder-panel">
+      <div class="waveform-wrap">
+        <canvas id="waveCanvas"></canvas>
+      </div>
+
+      <div class="timer" id="timer">00:00:00</div>
+
+      <div class="controls">
+        <!-- Rewind -->
+        <button class="btn btn-sm" id="btnRewind" disabled title="Rewind 10s">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+            <text x="12" y="16" font-size="7" fill="currentColor" stroke="none" text-anchor="middle">10</text>
+          </svg>
+        </button>
+
+        <!-- Record / Stop -->
+        <button class="btn btn-record" id="btnRecord" title="Record">
+          <div class="rec-icon"></div>
+        </button>
+
+        <!-- Pause -->
+        <button class="btn btn-sm" id="btnPause" disabled title="Pause">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+
+        <button class="btn-transcribe" id="btnTranscribe" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Transcribe
+        </button>
+      </div>
+    </div>
+
+    <!-- Recordings List -->
+    <div class="recordings-section">
+      <div class="recordings-header">
+        <span class="recordings-title">Recordings</span>
+        <span class="badge" id="recCount">0 sessions</span>
+      </div>
+      <div id="recList">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">🎙</div>
+          <p>No recordings yet. Press the record button to start capturing a call.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"><div class="t-dot"></div><span id="toastMsg"></span></div>
+
+<script>
+// ── Software Options ──
+const SOFTWARE = [
+  { id: 'zoll', name: 'ZOLL RescueNet', type: 'ePCR / CAD', emoji: '🔴', color: '#e24b4a' },
+  { id: 'imagetrend', name: 'ImageTrend', type: 'ePCR Platform', emoji: '🔵', color: '#378add' },
+  { id: 'emsimple', name: 'ESO Suite', type: 'ePCR / Analytics', emoji: '🟢', color: '#639922' },
+  { id: 'firstwatch', name: 'FirstWatch', type: 'Real-Time Monitor', emoji: '🟡', color: '#ba7517' },
+  { id: 'proqa', name: 'ProQA / AQUA', type: 'Dispatch Protocol', emoji: '🟠', color: '#d85a30' },
+  { id: 'other', name: 'Other / Custom', type: 'Generic export', emoji: '⚙️', color: '#888780' },
+];
+
+let selectedSoftware = null;
+
+function renderSoftware() {
+  const grid = document.getElementById('softwareGrid');
+  grid.innerHTML = '';
+  SOFTWARE.forEach(sw => {
+    const btn = document.createElement('button');
+    btn.className = 'software-card' + (selectedSoftware === sw.id ? ' active' : '');
+    btn.innerHTML = `
+      <div class="sw-icon">${sw.emoji}</div>
+      <div class="sw-info">
+        <div class="sw-name">${sw.name}</div>
+        <div class="sw-type">${sw.type}</div>
+      </div>
+      <svg class="sw-check" viewBox="0 0 20 20" fill="${sw.color}"><circle cx="10" cy="10" r="10" opacity="0.15"/><path d="M6 10l3 3 5-5" stroke="${sw.color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    `;
+    btn.onclick = () => { selectedSoftware = sw.id; renderSoftware(); toast(`Software set: ${sw.name}`); };
+    grid.appendChild(btn);
+  });
+}
+renderSoftware();
+
+// ── Timer ──
+let timerSec = 0, timerInterval = null;
+function startTimer() {
+  timerSec = 0;
+  timerInterval = setInterval(() => { timerSec++; updateTimer(); }, 1000);
+}
+function stopTimer() { clearInterval(timerInterval); }
+function updateTimer() {
+  const h = String(Math.floor(timerSec/3600)).padStart(2,'0');
+  const m = String(Math.floor((timerSec%3600)/60)).padStart(2,'0');
+  const s = String(timerSec%60).padStart(2,'0');
+  const el = document.getElementById('timer');
+  el.textContent = `${h}:${m}:${s}`;
+}
+
+// ── Waveform Canvas ──
+const canvas = document.getElementById('waveCanvas');
+const ctx = canvas.getContext('2d');
+let animFrame = null;
+let audioCtx = null, analyser = null, dataArr = null;
+let isRecording = false;
+
+function resizeCanvas() {
+  canvas.width = canvas.offsetWidth * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function drawIdle() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+  ctx.stroke();
+}
+drawIdle();
+
+function drawWave() {
+  if (!analyser) return;
+  animFrame = requestAnimationFrame(drawWave);
+  analyser.getByteTimeDomainData(dataArr);
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // BG grid line
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+
+  ctx.strokeStyle = isRecording ? '#e24b4a' : '#3bbd93';
+  ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.beginPath();
+  const sliceW = W / dataArr.length;
+  let x = 0;
+  for (let i = 0; i < dataArr.length; i++) {
+    const v = dataArr[i] / 128;
+    const y = v * H / 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx.stroke();
+}
+
+// ── MediaRecorder ──
+let mediaRecorder = null, audioChunks = [], stream = null;
+let recordings = [];
+let isPaused = false;
+
+const btnRecord = document.getElementById('btnRecord');
+const btnPause = document.getElementById('btnPause');
+const btnRewind = document.getElementById('btnRewind');
+const btnTranscribe = document.getElementById('btnTranscribe');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+
+btnRecord.addEventListener('click', () => {
+  isRecording ? stopRecording() : startRecording();
+});
+
+btnPause.addEventListener('click', () => {
+  if (!mediaRecorder) return;
+  if (isPaused) {
+    mediaRecorder.resume();
+    isPaused = false;
+    btnPause.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    statusDot.className = 'status-dot recording';
+    statusText.textContent = 'Recording';
+    timerInterval || (timerInterval = setInterval(() => { timerSec++; updateTimer(); }, 1000));
+    toast('Recording resumed');
+  } else {
+    mediaRecorder.pause();
+    isPaused = true;
+    btnPause.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>`;
+    statusDot.className = 'status-dot ready';
+    statusText.textContent = 'Paused';
+    clearInterval(timerInterval);
+    toast('Recording paused');
+  }
+});
+
+async function startRecording() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new AudioContext();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    dataArr = new Uint8Array(analyser.frequencyBinCount);
+    const source = audioCtx.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = finalizeRecording;
+    mediaRecorder.start(250);
+
+    isRecording = true;
+    isPaused = false;
+    btnRecord.classList.add('recording');
+    btnPause.disabled = false;
+    btnRewind.disabled = false;
+    btnTranscribe.disabled = true;
+    statusDot.className = 'status-dot recording';
+    statusText.textContent = 'Recording';
+    document.getElementById('timer').classList.add('recording');
+    startTimer();
+    drawWave();
+    toast('Recording started');
+  } catch (e) {
+    toast('Microphone access denied. Please allow mic permissions.', true);
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  stream && stream.getTracks().forEach(t => t.stop());
+  cancelAnimationFrame(animFrame);
+  stopTimer();
+  isRecording = false;
+  isPaused = false;
+  btnRecord.classList.remove('recording');
+  btnPause.disabled = true;
+  btnRewind.disabled = true;
+  btnPause.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+  statusDot.className = 'status-dot ready';
+  statusText.textContent = 'Stopped';
+  document.getElementById('timer').classList.remove('recording');
+  drawIdle();
+}
+
+function finalizeRecording() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const url = URL.createObjectURL(blob);
+  const inc = document.getElementById('incidentNum').value || `INC-${Date.now().toString().slice(-6)}`;
+  const unit = document.getElementById('unitId').value || '—';
+  const type = document.getElementById('callType').value || 'Unknown';
+  const sw = SOFTWARE.find(s => s.id === selectedSoftware);
+  const now = new Date();
+  const duration = timerSec;
+
+  const rec = {
+    id: Date.now(),
+    name: inc,
+    unit, type,
+    software: sw ? sw.name : 'Not selected',
+    duration,
+    timestamp: now.toLocaleString(),
+    blob, url,
+    transcript: null,
+  };
+  recordings.unshift(rec);
+  renderRecordings();
+  btnTranscribe.disabled = false;
+  toast(`Saved: ${inc}`);
+  timerSec = 0; updateTimer();
+}
+
+// ── Recordings Render ──
+function renderRecordings() {
+  const list = document.getElementById('recList');
+  const empty = document.getElementById('emptyState');
+  const count = document.getElementById('recCount');
+  count.textContent = `${recordings.length} session${recordings.length !== 1 ? 's' : ''}`;
+
+  if (recordings.length === 0) { empty.style.display = 'flex'; return; }
+  empty.style.display = 'none';
+
+  list.innerHTML = '';
+  recordings.forEach(rec => {
+    const card = document.createElement('div');
+    card.className = 'rec-card';
+    card.id = `rec-${rec.id}`;
+
+    const dur = fmtDur(rec.duration);
+    card.innerHTML = `
+      <div class="rec-card-head" onclick="toggleTranscript(${rec.id})">
+        <div class="rec-thumb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <div class="rec-meta">
+          <div class="rec-name">${rec.name}</div>
+          <div class="rec-sub">
+            <span>⏱ ${dur}</span>
+            <span>📋 ${rec.type}</span>
+            <span>🖥 ${rec.software}</span>
+          </div>
+        </div>
+        <div class="rec-actions" onclick="event.stopPropagation()">
+          <button class="rec-btn" onclick="playRecording(${rec.id})">▶ Play</button>
+          <button class="rec-btn primary" onclick="transcribeRecording(${rec.id})">✦ Transcribe</button>
+          <button class="rec-btn" onclick="downloadRecording(${rec.id})">↓ Export</button>
+        </div>
+      </div>
+      <div class="transcript-box" id="tb-${rec.id}">
+        <div class="transcript-label">Transcription</div>
+        <div class="transcript-text pending" id="tt-${rec.id}">${rec.transcript || 'No transcription yet. Click "Transcribe" to process this recording.'}</div>
+        ${rec.transcript ? `
+        <div class="transcript-footer">
+          <button class="copy-btn" onclick="copyTranscript(${rec.id})">📋 Copy text</button>
+          <button class="export-btn" onclick="exportTranscript(${rec.id})">↓ Export to ${rec.software}</button>
+        </div>` : ''}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function fmtDur(s) {
+  const m = Math.floor(s/60), sec = s%60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function toggleTranscript(id) {
+  const tb = document.getElementById(`tb-${id}`);
+  tb.classList.toggle('open');
+}
+
+function playRecording(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec) return;
+  const audio = new Audio(rec.url);
+  audio.play();
+  toast('Playing recording...');
+}
+
+function downloadRecording(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec) return;
+  const a = document.createElement('a');
+  a.href = rec.url;
+  a.download = `${rec.name}_${rec.unit}.webm`;
+  a.click();
+  toast('Audio file downloaded');
+}
+
+function copyTranscript(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec || !rec.transcript) return;
+  navigator.clipboard.writeText(rec.transcript).then(() => toast('Transcript copied to clipboard'));
+}
+
+function exportTranscript(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec || !rec.transcript) return;
+  const content = `EMT Call Transcript
+====================
+Incident: ${rec.name}
+Unit: ${rec.unit}
+Type: ${rec.type}
+Date: ${rec.timestamp}
+Duration: ${fmtDur(rec.duration)}
+Software: ${rec.software}
+
+TRANSCRIPT:
+${rec.transcript}
+`;
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${rec.name}_transcript.txt`;
+  a.click();
+  toast(`Exported for ${rec.software}`);
+}
+
+// ── Simulated Transcription ──
+const SAMPLE_TRANSCRIPTS = [
+  "Dispatch, this is Medic 12. We're on scene at 1420 Oak Street. Patient is a 64-year-old male, conscious and alert. Complaining of chest pain radiating to the left arm. Onset approximately 20 minutes ago. Blood pressure is 150 over 90. Heart rate 88. Respiratory rate 18. SpO2 at 95% on room air. We're initiating 12-lead and starting an IV. Requesting priority transport to Memorial General.",
+  "We've got a 34-year-old female involved in a motor vehicle accident. She was the restrained driver. Airbag deployed. Alert and oriented times four. She's complaining of neck and lower back pain. No loss of consciousness reported. GCS is 15. Pupils equal and reactive. Cervical spine precautions in place. Requesting ALS backup and notifying the trauma team.",
+  "Patient is a 78-year-old female with a history of COPD presenting with severe respiratory distress. Sitting upright, pursed-lip breathing. Using accessory muscles. SpO2 is 82% on room air — now at 89% on 4 liters nasal cannula. Breath sounds diminished bilaterally with expiratory wheezes. We're administering a bronchodilator treatment and increasing O2 to 6 liters. Estimated 8 minutes to St. Luke's.",
+];
+
+function transcribeRecording(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec) return;
+  const tb = document.getElementById(`tb-${id}`);
+  const tt = document.getElementById(`tt-${id}`);
+  tb.classList.add('open');
+  tt.className = 'transcript-text pending';
+  tt.innerHTML = `<span class="spinner"></span>&nbsp; Transcribing audio...`;
+
+  setTimeout(() => {
+    rec.transcript = SAMPLE_TRANSCRIPTS[Math.floor(Math.random() * SAMPLE_TRANSCRIPTS.length)];
+    tt.className = 'transcript-text';
+    tt.textContent = rec.transcript;
+
+    // Add footer
+    const footer = document.createElement('div');
+    footer.className = 'transcript-footer';
+    footer.innerHTML = `
+      <button class="copy-btn" onclick="copyTranscript(${id})">📋 Copy text</button>
+      <button class="export-btn" onclick="exportTranscript(${id})">↓ Export to ${rec.software}</button>
+    `;
+    const existing = tb.querySelector('.transcript-footer');
+    if (existing) existing.remove();
+    tb.appendChild(footer);
+    toast('Transcription complete');
+  }, 2200);
+}
+
+// ── Top-level Transcribe button ──
+btnTranscribe.addEventListener('click', () => {
+  if (recordings.length > 0) transcribeRecording(recordings[0].id);
+});
+
+// ── Toast ──
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
